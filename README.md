@@ -1,54 +1,86 @@
-# Smart AI Gateway
+## Smart AI Gateway
 
-A FastAPI application that routes prompts to OpenAI models using
-keyword rules. It includes authentication, rate limiting, fallback
-handling, response caching, and request logging.
+A Python project that chooses between two AI models, returns an
+answer, and tracks how each request was handled.
 
-## Features
+## Why I built it
 
-- Simple prompts route to a lower-cost model.
-- Selected keywords route to a stronger model.
-- Eligible server errors trigger one backup model attempt.
-- Matching responses are cached for five minutes.
-- Callers can bypass caching with use_cache: false.
-- Chat requests require a gateway access key.
-- Up to five chat attempts are allowed per rolling 60 seconds.
-- Responses include request IDs, timing, and token usage.
-- Logs are written to logs/gateway.log.
+- To learn how applications connect to AI models.
+- To route simple and complex questions to different models.
+- To practice handling failures, controlling usage, and reusing answers.
 
-## Setup
+## What it does
 
-Requires Python 3.10 or newer.
+- **Model selection:** Uses keywords to choose a model.
+  - Simple prompts use the `cheap` route.
+  - Keywords such as `debug` and `architecture` use the `strong` route.
+- **Backup model:** Tries another model once after certain server errors.
+- **Saved answers:** Reuses matching answers for up to five minutes.
+- **Fresh answers:** Lets the caller skip saved answers.
+- **Access key:** Requires a gateway key before accepting chat requests.
+- **Usage limit:** Allows five chat attempts within a rolling 60 seconds.
+- **Request tracking:** Gives each accepted chat request a unique ID.
+- **Monitoring:** Shows response time and token usage.
+- **Logs:** Records request details in the terminal and a local file.
 
-Create and activate a virtual environment in PowerShell:
+## How a request works
+
+1. The user sends a question and gateway access key.
+2. The gateway checks the input, key, and request limit.
+3. Keyword rules choose the model route.
+4. If a matching saved answer exists and caching is enabled, it is returned.
+5. Otherwise, the gateway calls OpenAI.
+6. If an eligible server error occurs, it tries the backup model once.
+7. The gateway returns the answer and request details.
+
+## Tools used
+
+- Python
+- FastAPI
+- OpenAI API
+- Pydantic
+- Git and GitHub
+- Python logging and testing tools
+
+## Run the project locally
+
+- Install Python 3.10 or newer.
+- Clone the project:
+
+```powershell
+git clone https://github.com/RohitPoosarla/smart-ai-gateway.git
+cd smart-ai-gateway
+```
+
+- Create and activate a virtual environment:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-Install dependencies:
+- Install the required packages:
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-Copy .env.example to .env and replace the placeholder keys.
-Never commit real keys.
+- Copy `.env.example` to `.env` for a new checkout.
+- Replace the placeholders with your own keys.
+- Use separate keys for OpenAI and gateway access.
+- Keep real keys private.
 
-## Run
+- Start the server:
 
 ```powershell
 python -m uvicorn main:app --reload
 ```
 
-Swagger: http://127.0.0.1:8000/docs
-
-Health check: http://127.0.0.1:8000/health
+- Open Swagger: http://127.0.0.1:8000/docs
+- Enter your gateway key in the `x-api-key` field.
+- Send a request using the example below.
 
 ## Example request
-
-In Swagger, enter GATEWAY_API_KEY's value in the x-api-key header.
 
 ```json
 {
@@ -58,29 +90,57 @@ In Swagger, enter GATEWAY_API_KEY's value in the x-api-key header.
 }
 ```
 
-## Tests
+- `prompt`: The question to send.
+- `max_output_tokens`: The maximum output length in tokens.
+- `use_cache`: Whether the gateway can reuse a saved answer.
 
-These tests use simulated results and do not call OpenAI:
+## Understanding the response
+
+- `request_id`: Helps find the matching log entry.
+- `route`: The route originally selected by the keyword rules.
+- `model`: The model that generated the answer.
+- `fallback_used`: Whether the backup model generated it.
+- `cache_hit`: Whether the answer came from saved results.
+- `response_time_ms`: Time measured for the model call or cache path.
+- `usage`: Tokens used by this request.
+- `original_usage`: On cache hits, tokens used to generate the saved answer.
+
+## What I tested
+
+- Empty, missing, spaces-only, and oversized prompts are rejected.
+- A missing gateway key is rejected.
+- A correct gateway key allows a valid request.
+- Simple and keyword-matched prompts select the expected routes.
+- Too many requests return a wait time.
+- Repeated requests can use saved answers.
+- Cache bypass makes a new model call.
+- Simulated server failures trigger the backup model.
+- Simulated authentication failures do not trigger fallback.
+- If both models fail, calls stop after two attempts.
+- Saved answers expire after five minutes.
+
+## Run the automated tests
 
 ```powershell
 python test_fallback.py
 python test_response_cache.py
 ```
 
-## Files
-
-- main.py: API endpoints, authentication, and model calls
-- router.py: Keyword-based routing
-- rate_limiter.py: Request frequency control
-- response_cache.py: Temporary response storage
-- test_fallback.py: Simulated fallback tests
-- test_response_cache.py: Cache expiry tests
-- requirements.txt: Installed dependencies
-- .env.example: Configuration template
+- These tests use simulated results.
+- They do not make paid OpenAI calls.
 
 ## Current limitations
 
-This is a local development project. Cache and rate-limit state
-are stored in memory, reset on restart, and are not shared between
-server processes. The rate limit is shared across callers.
-Routing uses keywords rather than an AI complexity classifier.
+- The project currently runs locally.
+- Model selection uses keywords, not an AI assessment of difficulty.
+- Saved answers and request counts reset when the server restarts.
+- The request limit is shared across callers.
+- Fallback does not cover every type of failure.
+- Token counts show successful generation usage, not a complete billing report.
+
+## Future improvements
+
+- Add a Streamlit interface.
+- Improve error messages.
+- Add more automated tests.
+- Support multiple users and server processes.
